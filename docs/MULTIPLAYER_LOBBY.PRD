@@ -1,0 +1,96 @@
+PRD: Multiplayer Waiting Lobby
+1. Overview
+This document outlines the requirements for the multiplayer waiting lobby. This is the screen users see after clicking the "Multiplayer" button on the home screen. Its sole purpose is to provide feedback to the user that they are in a queue while the server waits for a second player to connect.
+
+2. Objective
+To create a seamless and automatic transition from the home screen into a multiplayer game. The user should click "Multiplayer" and be placed into a game as soon as one other person is available, without any further input required.
+
+3. User Story
+As a player, when I click "Multiplayer," I want to see a screen that tells me I'm waiting for an opponent, so I know the game hasn't frozen.
+As a player, once another person joins, I want the game to start automatically.
+4. Functional Requirements
+ID	Requirement	Description
+LBY-01	Display Waiting Status	After a user selects "Multiplayer," the client must display a view with a message like "Waiting for another player to join...".
+LBY-02	Listen for Game Start	The client must listen for a game-start event from the server.
+LBY-03	Automatic Game Transition	Upon receiving the game-start event, the client must automatically transition from the waiting lobby screen to the main GameBoard.
+LBY-04	Server-Side Queue	The server must maintain a queue of connected players who are waiting for a match.
+LBY-05	Server-Side Matchmaking	When two players are in the queue, the server must pair them, initialize the game state, and emit the game-start event to both players.
+Code Implementation
+Here is the existing code that accomplishes the functionality described in the PRD.
+
+Client-Side: The Waiting Screen UI
+This logic is located in App.tsx. The MultiplayerGame component conditionally renders a waiting message if the gameState has not yet been received from the server.
+
+typescriptreact
+// c:\Users\LB\Desktop\Linda Baloyi\MadGames\casino-game-multiplayer-official-main\App.tsx
+
+// ... (imports)
+
+// Wrapper for the multiplayer game experience
+const MultiplayerGame = () => {
+  const { gameState, playerNumber, sendAction } = useSocket();
+
+  // ... (other handlers)
+
+  if (!gameState) {
+    return (
+      <View style={styles.container}>
+        <Text style={{color: 'white', fontSize: 30, textAlign: 'center'}}>
+          Waiting for another player to join...
+        </Text>
+      </View>
+    );
+  }
+
+  return <GameBoard initialState={gameState} playerNumber={playerNumber} sendAction={sendAction} onRestart={handleRestart} onBackToMenu={handleBackToMenu} />;
+}
+
+// ... (rest of the file)
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#0f4d0f',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+});
+Server-Side: The Matchmaking Logic
+This logic in server/server.js is responsible for queuing players and starting the game. It holds connected players in an array and when the count reaches two, it initializes and dispatches the game state.
+
+javascript
+// c:\Users\LB\Desktop\Linda Baloyi\MadGames\casino-game-multiplayer-official-main\server\server.js
+
+// ... (imports and setup)
+
+let players = [];
+let gameState = null;
+
+io.on('connection', (socket) => {
+  console.log('a user connected:', socket.id);
+  players.push(socket);
+  console.log(`Total players connected: ${players.length}`);
+
+  // Assign player number
+  const playerNumber = players.length;
+  console.log(`Assigning player number ${playerNumber - 1} to socket: ${socket.id}`); // Emit 0-indexed player number
+  socket.emit('player-number', playerNumber - 1); // Emit 0-indexed player number
+
+  if (players.length === 2) {
+    // Start the game
+    gameState = initializeGame(); // initializeGame should return 0-indexed currentPlayer
+    console.log('Two players connected. Starting game...');
+
+    // Emit game state to both players
+    players.forEach((playerSocket, index) => {
+      console.log(`Emitting game-start to playerSocket ${playerSocket.id} as playerNumber ${index}`);
+      playerSocket.emit('game-start', { gameState, playerNumber: index });
+    });
+  }
+
+  // ... (game-action and disconnect handlers)
+});
+
+// ... (server listen)
+This simple, event-driven approach effectively creates the lobby experience you requested. The client shows a waiting screen, and the server pushes the game state once the lobby is full, which triggers the client to render the game board.
+

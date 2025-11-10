@@ -1,0 +1,105 @@
+# Home Screen PRD
+
+## Overview
+The home screen serves as the main entry point for the Casino Card Game application. It provides users with options to start a single-player game or enter multiplayer mode. The screen features a clean, casino-themed design with a green background and prominent buttons for mode selection.
+
+## Requirements
+- Display the game title prominently
+- Provide two mode selection buttons: Single Player and Multiplayer
+- Maintain consistent styling with the overall app theme
+- Support landscape orientation
+- Ensure touch-friendly button sizes
+
+## Code Implementation
+
+```tsx
+import React from 'react';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+
+interface StartScreenProps {
+  onSelectMode: (mode: 'single' | 'multiplayer') => void;
+}
+
+const StartScreen: React.FC<StartScreenProps> = ({ onSelectMode }) => {
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Casino Card Game</Text>
+      <View style={styles.buttonContainer}>
+        <TouchableOpacity style={styles.button} onPress={() => onSelectMode('single')}>
+          <Text style={styles.buttonText}>Single Player</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.button} onPress={() => onSelectMode('multiplayer')}>
+          <Text style={styles.buttonText}>Multiplayer</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#0f4d0f', // Same as GameBoard
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  title: {
+    fontSize: 48,
+    fontWeight: 'bold',
+    color: 'white',
+    marginBottom: 80,
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: -1, height: 1 },
+    textShadowRadius: 10,
+  },
+  buttonContainer: {
+    width: '60%',
+  },
+  button: {
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    paddingVertical: 15,
+    paddingHorizontal: 30,
+    borderRadius: 10,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  buttonText: {
+    color: 'white',
+    fontSize: 24,
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+});
+
+export default StartScreen;
+```
+
+## Styling Details
+
+### Color Scheme
+- Background: Dark green (#0f4d0f) - casino table color
+- Text: White with black text shadow for readability
+- Buttons: Semi-transparent black background with white border
+
+### Layout
+- Full-screen container with center alignment
+- Title at top with large font size (48px)
+- Button container takes 60% of screen width
+- Buttons stacked vertically with 20px margin between
+
+### Typography
+- Title: Bold, 48px, white with shadow
+- Button Text: Medium weight, 24px, white, center-aligned
+
+### Interactive Elements
+- Buttons have rounded corners (10px radius)
+- Semi-transparent background with subtle border
+- Adequate padding for touch targets
+
+## Dependencies
+- React Native core components: View, Text, TouchableOpacity
+- StyleSheet for styling
+
+## Props
+- `onSelectMode`: Function to handle mode selection, accepts 'single' or 'multiplayer'

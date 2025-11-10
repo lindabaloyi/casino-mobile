@@ -1,0 +1,319 @@
+const express = require('express');
+const { createServer } = require('http');
+const { Server } = require('socket.io');
+
+const app = express();
+const server = createServer(app);
+const io = new Server(server, {
+  cors: { origin: "*" } // Allow all origins for simplicity
+});
+
+// Import game logic functions
+const {
+  handleCreateStagingStack,
+  handleAddToStagingStack,
+  handleFinalizeStagingStack,
+  handleCreateBuildWithValue,
+  handleCancelStagingStack,
+  handleAddToOpponentBuild,
+  handleAddToOwnBuild,
+  handleCapture,
+  handleTrail,
+  handleBuild
+} = require('../../../casino-game-multiplayer-main/game-logic/game-actions.js');
+
+console.log('[SERVER] Imported functions:', {
+  handleCreateStagingStack: typeof handleCreateStagingStack,
+  handleFinalizeStagingStack: typeof handleFinalizeStagingStack,
+  handleCancelStagingStack: typeof handleCancelStagingStack
+});
+
+const PORT = process.env.PORT || 3001;
+
+let players = []; // Array of connected socket objects
+let gameState = null;
+
+function initializeGame() {
+  console.log('[SERVER] Initializing game state...');
+
+  // Helper to get card value
+  const rankValue = (rank) => {
+    if (rank === 'A') return 1;
+    return parseInt(rank, 10);
+  };
+
+  // Helper to shuffle the deck
+  const shuffleDeck = (deck) => {
+    const shuffled = [...deck];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+  };
+
+  // 1. Create Deck (40 cards: A-10 for each suit)
+  const suits = ['♠', '♥', '♦', '♣'];
+  const ranks = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10'];
+  let deck = [];
+  for (const suit of suits) {
+    for (const rank of ranks) {
+      deck.push({ suit, rank, value: rankValue(rank) });
+    }
+  }
+
+  // 2. Shuffle Deck
+  deck = shuffleDeck(deck);
+
+  // 3. Deal Cards (10 cards each to 2 players)
+  const playerHands = [[], []];
+  for (let i = 0; i < 10; i++) {
+    playerHands[0].push(deck.pop()); // Player 0
+    playerHands[1].push(deck.pop()); // Player 1
+  }
+
+  // 4. Return Initial Game State
+  return {
+    deck,
+    playerHands,
+    tableCards: [],
+    playerCaptures: [[], []],
+    currentPlayer: 0, // Player 0 starts
+    round: 1,
+    scores: [0, 0],
+    gameOver: false,
+    winner: null,
+    lastCapturer: null,
+    scoreDetails: null,
+  };
+}
+
+io.on('connection', (socket) => {
+  console.log(`[SERVER] A user connected: ${socket.id}`);
+  players.push(socket); // Add to players array
+  console.log(`[SERVER] Total players connected: ${players.length}`);
+
+  // Assign player number (0-based)
+  const playerNumber = players.length;
+  console.log(`[SERVER] Assigning player number ${playerNumber - 1} to socket: ${socket.id}`);
+  socket.emit('player-number', playerNumber - 1);
+
+  if (players.length === 2) {
+    gameState = initializeGame(); // Starts with currentPlayer: 0
+    console.log('[SERVER] Two players connected. Starting game...');
+
+    // Send initial game state to both players
+    players.forEach((playerSocket, index) => {
+      console.log(`[SERVER] Emitting game-start to ${playerSocket.id} as playerNumber ${index}`);
+      playerSocket.emit('game-start', { gameState, playerNumber: index });
+    });
+  }
+
+  socket.on('disconnect', () => {
+    console.log(`[SERVER] User disconnected: ${socket.id}`);
+    // Remove from players array - this maintains the index mapping!
+    players = players.filter(p => p.id !== socket.id);
+    console.log(`[SERVER] Total players after disconnect: ${players.length}`);
+
+    if (players.length < 2) {
+      gameState = null;
+      console.log('[SERVER] Game reset due to insufficient players');
+    }
+  });
+
+  // Action processing with turn validation
+  socket.on('game-action', (data) => {
+    console.log(`[SERVER] Received game-action: ${data.type} from socket ${socket.id}`);
+    if (!gameState || players.length < 2) {
+      console.log('[SERVER] Ignoring action, game not started or not enough players.');
+      return;
+    }
+
+    // 🔑 CRITICAL: Find player by socket ID in players array
+    const playerIndex = players.findIndex(p => p.id === socket.id);
+    if (playerIndex !== gameState.currentPlayer) {
+      console.log(`[SERVER] Rejected action from playerIndex ${playerIndex} because it's player ${gameState.currentPlayer}'s turn.`);
+      return socket.emit('error', { message: "It's not your turn." });
+    }
+
+    console.log(`[SERVER] Processing ${data.type} from player ${gameState.currentPlayer}`);
+
+    // Process action (trail, capture, etc.)
+    let newGameState = gameState;
+
+    try {
+      switch (data.type) {
+        case 'trail':
+          console.log(`[SERVER] Player ${playerIndex} trailed card:`, data.payload.card);
+          // Find and remove card from player's hand
+          const playerHand = gameState.playerHands[playerIndex];
+          const cardIndex = playerHand.findIndex(c =>
+            c.rank === data.payload.card.rank && c.suit === data.payload.card.suit
+          );
+          if (cardIndex === -1) {
+            return socket.emit('error', { message: "Card not found in hand." });
+          }
+
+          // Add to table and advance turn
+          const trailedCard = playerHand.splice(cardIndex, 1)[0];
+          newGameState = {
+            ...gameState,
+            playerHands: gameState.playerHands.map((hand, idx) =>
+              idx === playerIndex ? playerHand : hand
+            ),
+            tableCards: [...gameState.tableCards, { ...trailedCard, type: 'loose' }],
+            currentPlayer: (gameState.currentPlayer + 1) % 2
+          };
+          console.log(`[SERVER] Player ${playerIndex} trailed ${trailedCard.rank}${trailedCard.suit}`);
+          break;
+
+        case 'capture':
+          console.log(`[SERVER] Player ${playerIndex} captured:`, data.payload);
+          newGameState = handleCapture(gameState, data.payload.draggedItem, data.payload.selectedTableCards, data.payload.targetCard);
+          break;
+
+        case 'build':
+          console.log(`[SERVER] Player ${playerIndex} building:`, data.payload);
+          const { draggedItem: buildDraggedItem, tableCardsInBuild, buildValue, biggerCard, smallerCard } = data.payload;
+
+          // Find and remove dragged card from player's hand
+          const buildPlayerHand = gameState.playerHands[playerIndex];
+          const buildCardIndex = buildPlayerHand.findIndex(c =>
+            c.rank === buildDraggedItem.card.rank && c.suit === buildDraggedItem.card.suit
+          );
+          if (buildCardIndex === -1) {
+            return socket.emit('error', { message: "Card not found in hand." });
+          }
+
+          // Remove dragged card from hand
+          const buildCard = buildPlayerHand.splice(buildCardIndex, 1)[0];
+
+          // Create build object
+          const build = {
+            type: 'build',
+            value: buildValue,
+            cards: [biggerCard, smallerCard],
+            owner: playerIndex,
+            buildId: `build-${Date.now()}`
+          };
+
+          // Remove table cards that are part of the build
+          let buildUpdatedTableCards = [...gameState.tableCards];
+          tableCardsInBuild.forEach(tableCard => {
+            buildUpdatedTableCards = buildUpdatedTableCards.filter(tc => {
+              if (tc.type === 'loose') {
+                return !(tc.rank === tableCard.rank && tc.suit === tableCard.suit);
+              }
+              return true;
+            });
+          });
+
+          // Add build to table
+          buildUpdatedTableCards.push(build);
+
+          newGameState = {
+            ...gameState,
+            playerHands: gameState.playerHands.map((hand, idx) =>
+              idx === playerIndex ? buildPlayerHand : hand
+            ),
+            tableCards: buildUpdatedTableCards,
+            currentPlayer: (gameState.currentPlayer + 1) % 2
+          };
+          console.log(`[SERVER] Player ${playerIndex} created build with value ${buildValue}`);
+          break;
+
+        case 'createStagingStack':
+          console.log(`[SERVER] Player ${playerIndex} creating staging stack:`, data.payload);
+          console.log(`[SERVER] About to call handleCreateStagingStack, function exists:`, typeof handleCreateStagingStack);
+          try {
+            newGameState = handleCreateStagingStack(gameState, data.payload.handCard, data.payload.tableCard);
+            console.log(`[SERVER] handleCreateStagingStack returned successfully`);
+            console.log(`[SERVER] New tableCards count:`, newGameState.tableCards?.length || 0);
+          } catch (error) {
+            console.error(`[SERVER] Error in handleCreateStagingStack:`, error);
+            newGameState = gameState; // Keep original state on error
+          }
+          break;
+
+        case 'addToStagingStack':
+          console.log(`[SERVER] Player ${playerIndex} adding to staging stack:`, data.payload);
+          newGameState = handleAddToStagingStack(gameState, data.payload.handCard, data.payload.targetStack);
+          break;
+
+        case 'finalizeStagingStack':
+          console.log(`[SERVER] Player ${playerIndex} finalizing staging stack:`, data.payload);
+          const finalizeResult = handleFinalizeStagingStack(gameState, data.payload.stack);
+          if (finalizeResult.error) {
+            return socket.emit('error', { message: finalizeResult.message });
+          }
+          if (finalizeResult.options) {
+            // Multiple build options - send back to client for selection
+            return socket.emit('build-options', finalizeResult);
+          }
+          newGameState = finalizeResult;
+          break;
+
+        case 'createBuildWithValue':
+          console.log(`[SERVER] Player ${playerIndex} creating build with specific value:`, data.payload);
+          newGameState = handleCreateBuildWithValue(gameState, data.payload.stack, data.payload.buildValue);
+          break;
+
+        case 'executeCaptureFromStack':
+          console.log(`[SERVER] Player ${playerIndex} executing capture from stack:`, data.payload);
+          const { stack: captureStack, targetCard, captureValue } = data.payload;
+          const handCardInStack = captureStack.cards.find(c => c.source === 'hand');
+          if (handCardInStack) {
+            newGameState = handleCapture(gameState, {
+              card: { ...handCardInStack, source: undefined },
+              source: 'hand'
+            }, targetCard === captureStack ? captureStack.cards.filter(c => c.source !== 'hand') : [targetCard], null);
+          } else {
+            console.error('[SERVER] No hand card found in capture stack');
+            newGameState = gameState;
+          }
+          break;
+
+        case 'cancelStagingStack':
+          console.log(`[SERVER] Player ${playerIndex} canceling staging stack:`, data.payload);
+          newGameState = handleCancelStagingStack(gameState, data.payload.stackToCancel);
+          break;
+
+        case 'addToOpponentBuild':
+          console.log(`[SERVER] Player ${playerIndex} adding to opponent build:`, data.payload);
+          newGameState = handleAddToOpponentBuild(gameState, data.payload.draggedItem, data.payload.buildToAddTo);
+          break;
+
+        case 'addToOwnBuild':
+          console.log(`[SERVER] Player ${playerIndex} adding to own build:`, data.payload);
+          newGameState = handleAddToOwnBuild(gameState, data.payload.draggedItem, data.payload.buildToAddTo);
+          break;
+
+        // ... other action cases remain the same ...
+
+        default:
+          return socket.emit('error', { message: `Unknown action type: ${data.type}` });
+      }
+    } catch (e) {
+      console.error("[SERVER] Error processing game action:", e);
+      return socket.emit('action-error', { message: e.message });
+    }
+
+    // 🔑 CRITICAL: Update global game state
+    gameState = newGameState;
+    console.log(`[SERVER] Updated global gameState. Table cards:`, gameState.tableCards.map(c => c.type ? `${c.type}(${c.owner || 'none'})` : `${c.rank}${c.suit}`));
+    console.log(`[SERVER] Full gameState to broadcast:`, JSON.stringify(gameState, null, 2));
+
+    // 🔑 CRITICAL: Broadcast to ALL players (not just active ones)
+    console.log(`[SERVER] About to emit game-update to ${players.length} players`);
+    const stateToSend = JSON.parse(JSON.stringify(gameState)); // Deep clone to ensure no references
+    io.emit('game-update', stateToSend);
+    console.log(`[SERVER] Broadcasted game-update: currentPlayer=${stateToSend.currentPlayer}, tableCardsCount=${stateToSend.tableCards?.length || 0}`);
+    console.log(`[SERVER] Emitted state tableCards:`, stateToSend.tableCards.map(c => c.type ? `${c.type}(${c.owner || 'none'})` : `${c.rank}${c.suit}`));
+  });
+});
+
+
+
+server.listen(PORT, () => {
+  console.log(`[SERVER] Matchmaking server listening on *:${PORT}`);
+});
