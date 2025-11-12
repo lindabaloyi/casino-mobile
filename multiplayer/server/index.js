@@ -19,7 +19,9 @@ const {
   handleAddToOwnBuild,
   handleCapture,
   handleTrail,
-  handleBuild
+  handleBuild,
+  handleTableCardDrop,
+  handleAddToTemporaryCaptureStack
 } = require('../../../casino-game-multiplayer-main/game-logic/game-actions.js');
 
 console.log('[SERVER] Imported functions:', {
@@ -169,7 +171,7 @@ io.on('connection', (socket) => {
 
         case 'capture':
           console.log(`[SERVER] Player ${playerIndex} captured:`, data.payload);
-          newGameState = handleCapture(gameState, data.payload.draggedItem, data.payload.selectedTableCards, data.payload.targetCard);
+          newGameState = handleCapture(gameState, data.payload.draggedItem, data.payload.selectedTableCards, data.payload.opponentCard || null);
           break;
 
         case 'build':
@@ -266,7 +268,7 @@ io.on('connection', (socket) => {
             newGameState = handleCapture(gameState, {
               card: { ...handCardInStack, source: undefined },
               source: 'hand'
-            }, targetCard === captureStack ? captureStack.cards.filter(c => c.source !== 'hand') : [targetCard], null);
+            }, [captureStack], null);
           } else {
             console.error('[SERVER] No hand card found in capture stack');
             newGameState = gameState;
@@ -286,6 +288,12 @@ io.on('connection', (socket) => {
         case 'addToOwnBuild':
           console.log(`[SERVER] Player ${playerIndex} adding to own build:`, data.payload);
           newGameState = handleAddToOwnBuild(gameState, data.payload.draggedItem, data.payload.buildToAddTo);
+          break;
+
+        case 'tableCardDrop':
+          console.log(`🎯 Table drop: ${data.payload.draggedCard.rank}${data.payload.draggedCard.suit} → ${data.payload.targetCard.rank}${data.payload.targetCard.suit}`);
+          const { draggedCard: tableDraggedCard, targetCard: tableTargetCard } = data.payload;
+          newGameState = handleTableCardDrop(gameState, tableDraggedCard, tableTargetCard);
           break;
 
         // ... other action cases remain the same ...

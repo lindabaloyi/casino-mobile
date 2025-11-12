@@ -75,7 +75,7 @@ const DraggableCard: React.FC<DraggableCardProps> = ({
     },
 
     onPanResponderRelease: (event, gestureState) => {
-      const dropPosition = {
+      const dropPosition: any = {
         x: event.nativeEvent.pageX,
         y: event.nativeEvent.pageY,
         handled: false,
@@ -83,16 +83,6 @@ const DraggableCard: React.FC<DraggableCardProps> = ({
       };
 
       // Check global drop zones
-      console.log(`[DraggableCard] Checking drop zones. Available zones:`, (global as any).dropZones?.length || 0);
-      console.log(`[DraggableCard] Drop position:`, dropPosition);
-
-      // Log all available zones for debugging
-      if ((global as any).dropZones) {
-        (global as any).dropZones.forEach((zone: any, index: number) => {
-          console.log(`[DraggableCard] Zone ${index}: ${zone.stackId} at (${zone.bounds.x}, ${zone.bounds.y}) ${zone.bounds.width}x${zone.bounds.height}`);
-        });
-      }
-
       if ((global as any).dropZones && (global as any).dropZones.length > 0) {
         let bestZone = null;
         let closestDistance = Infinity;
@@ -106,11 +96,6 @@ const DraggableCard: React.FC<DraggableCardProps> = ({
             width: width + (tolerance * 2),
             height: height + (tolerance * 2)
           };
-
-          console.log(`[DraggableCard] Checking zone ${zone.stackId}:`, {
-            bounds: zone.bounds,
-            expandedBounds
-          });
 
           // Check if drop position is inside expanded bounds
           if (dropPosition.x >= expandedBounds.x &&
@@ -127,14 +112,10 @@ const DraggableCard: React.FC<DraggableCardProps> = ({
               Math.pow(dropPosition.y - zoneCenter.y, 2)
             );
 
-            console.log(`[DraggableCard] ✅ Drop position is within zone ${zone.stackId}, distance: ${distance}`);
-
             if (distance < closestDistance) {
               closestDistance = distance;
               bestZone = zone;
             }
-          } else {
-            console.log(`[DraggableCard] ❌ Drop position is NOT within zone ${zone.stackId}`);
           }
         }
 
@@ -147,19 +128,18 @@ const DraggableCard: React.FC<DraggableCardProps> = ({
             stackId: stackId || undefined
           };
 
-          console.log(`[DraggableCard] Dropping on zone:`, bestZone.stackId);
           const dropResult = bestZone.onDrop(draggedItem);
+
           if (dropResult) {
             dropPosition.handled = true;
-            console.log(`[DraggableCard] Drop handled successfully`);
-          } else {
-            console.log(`[DraggableCard] Drop was not handled by zone`);
+
+            // Check if dropResult is an object with additional info (for table-to-table drops)
+            if (typeof dropResult === 'object' && dropResult.targetType) {
+              dropPosition.targetType = dropResult.targetType;
+              dropPosition.targetCard = dropResult.targetCard;
+            }
           }
-        } else {
-          console.log(`[DraggableCard] No suitable drop zone found`);
         }
-      } else {
-        console.log(`[DraggableCard] No drop zones available`);
       }
 
       // Animate back if not handled

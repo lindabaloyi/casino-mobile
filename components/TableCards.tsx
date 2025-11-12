@@ -3,6 +3,7 @@ import { View, StyleSheet, Dimensions } from 'react-native';
 import Card, { CardType } from './card';
 import { TableCard } from '../utils/actionDeterminer';
 import CardStack from './CardStack';
+import DraggableCard from './DraggableCard';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -12,14 +13,14 @@ interface TableCardsProps {
   currentPlayer: number;
   onFinalizeStack?: (stackId: string) => void;
   onCancelStack?: (stackId: string) => void;
+  onTableCardDragStart?: (card: any) => void;
+  onTableCardDragEnd?: (draggedItem: any, dropPosition: any) => void;
 }
 
-const TableCards: React.FC<TableCardsProps> = ({ tableCards = [], onDropOnCard, currentPlayer, onFinalizeStack, onCancelStack }) => {
+const TableCards: React.FC<TableCardsProps> = ({ tableCards = [], onDropOnCard, currentPlayer, onFinalizeStack, onCancelStack, onTableCardDragStart, onTableCardDragEnd }) => {
   const tableRef = useRef<View>(null);
 
   const handleDropOnStack = useCallback((draggedItem: any, stackId: string) => {
-    console.log(`[TableCards] Card dropped on stack ${stackId}:`, draggedItem);
-
     // Parse stack ID to get target information
     const parts = stackId.split('-');
     const targetType = parts[0]; // 'loose', 'build', or 'temp'
@@ -28,12 +29,26 @@ const TableCards: React.FC<TableCardsProps> = ({ tableCards = [], onDropOnCard, 
     if (targetType === 'loose') {
       // Dropped on a loose card
       const targetCard = tableCards[targetIndex];
+
       if (targetCard && targetCard.type === 'loose') {
-        return onDropOnCard?.(draggedItem, {
-          type: 'loose',
-          card: targetCard,
-          index: targetIndex
-        }) || false;
+        // Check if this is a table-to-table drop
+        if (draggedItem.source === 'table') {
+          console.log(`🎯 Table-to-table drop: ${draggedItem.card.rank}${draggedItem.card.suit} → ${targetCard.rank}${targetCard.suit}`);
+          // For table-to-table drops, we don't call onDropOnCard
+          // Instead, we return a special result that will be handled by the drag end
+          return {
+            handled: true,
+            targetType: 'loose',
+            targetCard: targetCard
+          };
+        } else {
+          // Normal hand-to-table drop
+          return onDropOnCard?.(draggedItem, {
+            type: 'loose',
+            card: targetCard,
+            index: targetIndex
+          }) || false;
+        }
       }
     } else if (targetType === 'build') {
       // Dropped on a build
@@ -83,6 +98,10 @@ const TableCards: React.FC<TableCardsProps> = ({ tableCards = [], onDropOnCard, 
                     onDropStack={(draggedItem) => handleDropOnStack(draggedItem, stackId)}
                     isBuild={false}
                     currentPlayer={currentPlayer}
+                    draggable={true}
+                    onDragStart={onTableCardDragStart}
+                    onDragEnd={onTableCardDragEnd}
+                    dragSource="table"
                   />
                 );
               } else if (tableItem.type === 'build') {

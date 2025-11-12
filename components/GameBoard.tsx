@@ -273,6 +273,54 @@ export function GameBoard({ initialState, playerNumber, sendAction, onRestart, o
     }
   }, [sendAction, gameState.tableCards]);
 
+  const handleTableCardDragStart = useCallback((card: any) => {
+    console.log(`🎴 Table drag start: ${card.rank}${card.suit}`);
+    if (!isMyTurn) {
+      console.log(`❌ Not your turn - ignoring table drag`);
+      return;
+    }
+    setDraggedCard(card);
+    setIsDragging(true);
+  }, [isMyTurn]);
+
+  const handleTableCardDragEnd = useCallback((draggedItem: any, dropPosition: any) => {
+    console.log(`[GameBoard] Table card drag end:`, draggedItem, dropPosition);
+    console.log(`[GameBoard] Dragged card: ${draggedItem.card.rank}${draggedItem.card.suit}`);
+    console.log(`[GameBoard] Drop position handled: ${dropPosition.handled}`);
+    console.log(`[GameBoard] Drop position targetType: ${dropPosition.targetType}`);
+
+    setDraggedCard(null);
+    setIsDragging(false);
+
+    // Handle table-to-table drops
+    if (dropPosition.handled) {
+      console.log(`[GameBoard] Table card drop was handled by a zone`);
+      // Check if it was dropped on another table card
+      if (dropPosition.targetType === 'loose') {
+        console.log(`[GameBoard] Table card dropped on another table card - sending tableCardDrop action`);
+        console.log(`[GameBoard] Target card: ${dropPosition.targetCard.rank}${dropPosition.targetCard.suit}`);
+
+        const actionPayload = {
+          type: 'tableCardDrop',
+          payload: {
+            draggedCard: draggedItem.card,
+            targetCard: dropPosition.targetCard
+          }
+        };
+
+        console.log(`[GameBoard] Sending action:`, actionPayload);
+        sendAction(actionPayload);
+        console.log(`[GameBoard] tableCardDrop action sent successfully`);
+      } else {
+        console.log(`[GameBoard] Drop target type is not 'loose': ${dropPosition.targetType}`);
+      }
+      return;
+    }
+
+    // If not handled by any zone, it's an invalid drop - snap back
+    console.log(`[GameBoard] Table card drop not handled, snapping back`);
+  }, [sendAction]);
+
   // Register table section as drop zone
   useEffect(() => {
     const registerDropZone = () => {
@@ -350,6 +398,8 @@ export function GameBoard({ initialState, playerNumber, sendAction, onRestart, o
             currentPlayer={playerNumber}
             onFinalizeStack={handleFinalizeStack}
             onCancelStack={handleCancelStack}
+            onTableCardDragStart={handleTableCardDragStart}
+            onTableCardDragEnd={handleTableCardDragEnd}
           />
         </View>
 

@@ -52,6 +52,11 @@ const rankValue = (rank: string): number => {
   return parseInt(rank, 10);
 };
 
+// Helper function to calculate sum of cards
+const calculateCardSum = (cards: Card[]): number => {
+  return cards.reduce((sum, card) => sum + rankValue(card.rank), 0);
+};
+
 // Find possible capture actions for a dragged card
 const findPossibleCaptures = (card: Card, tableCards: TableCard[]): Action[] => {
   const actions: Action[] = [];
@@ -82,6 +87,7 @@ const findPossibleCaptures = (card: Card, tableCards: TableCard[]): Action[] => 
           label: `Capture Build (${build.value})`,
           payload: {
             draggedItem: { card, source: 'hand' },
+            selectedTableCards: [build],
             targetCard: build,
             tableIndex: index
           }
@@ -155,6 +161,7 @@ export const determineActions = (
           label: `Capture Build (${tableCard.value})`,
           payload: {
             draggedItem,
+            selectedTableCards: [tableCard],
             targetCard: tableCard
           }
         });
@@ -214,21 +221,36 @@ export const determineActions = (
     }
   }
 
-  // 3. Check for adding to existing temp stack
+  // 3. Check for temp stack capture (NEW - direct capture by dropping hand card on temp stack)
   if (targetInfo.type === 'temporary_stack') {
     const targetStack = tableCards.find(c =>
       c.type === 'temporary_stack' && c.stackId === targetInfo.stackId
     );
 
-    if (targetStack && targetStack.owner === currentPlayer) {
-      actions.push({
-        type: 'addToStagingStack',
-        label: 'Add to Temp Stack',
-        payload: {
-          handCard: draggedCard,
-          targetStack
-        }
-      });
+    if (targetStack) {
+      // Calculate temp stack value (sum of all cards)
+      const stackValue = calculateCardSum(targetStack.cards || []);
+      console.log(`[ActionDeterminer] Temp stack value: ${stackValue}, hand card: ${draggedValue}`);
+
+      // Check if hand card can capture this temp stack
+      if (draggedValue === stackValue) {
+        actions.push({
+          type: 'capture',
+          label: `Capture Stack (${stackValue})`,
+          payload: {
+            draggedItem,
+            selectedTableCards: [targetStack],
+            targetCard: targetStack
+          }
+        });
+      } else {
+        // Cannot capture - this will result in an error
+        return {
+          actions: [],
+          requiresModal: false,
+          errorMessage: `Cannot capture stack worth ${stackValue} with a ${draggedCard.rank}`
+        };
+      }
     }
   }
 
@@ -480,6 +502,7 @@ const handleBuildDrop = (
       label: `Capture Build (${build.value})`,
       payload: {
         draggedItem,
+        selectedTableCards: [build],
         targetCard: build,
         tableIndex: targetInfo.index
       }
@@ -604,6 +627,7 @@ const analyzeCaptures = (draggedCard: Card, targetInfo: any, tableCards: TableCa
         label: `Capture Build (${build.value})`,
         payload: {
           draggedItem: { card: draggedCard, source: 'hand' },
+          selectedTableCards: [build],
           targetCard: build
         },
         priority: 1
@@ -747,6 +771,7 @@ const analyzeGlobalCaptures = (draggedCard: Card, tableCards: TableCard[]): Acti
           label: `Capture Build (${build.value})`,
           payload: {
             draggedItem: { card: draggedCard, source: 'hand' },
+            selectedTableCards: [build],
             targetCard: build
           },
           priority: 2

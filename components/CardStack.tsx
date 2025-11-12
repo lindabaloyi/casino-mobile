@@ -1,11 +1,12 @@
 import React, { useRef, useEffect, useState, memo } from 'react';
 import { View, StyleSheet, TouchableOpacity, Text } from 'react-native';
 import Card, { CardType } from './card';
+import DraggableCard from './DraggableCard';
 
 interface CardStackProps {
   stackId: string;
   cards: CardType[];
-  onDropStack?: (draggedItem: any) => boolean;
+  onDropStack?: (draggedItem: any) => boolean | any;
   buildValue?: number;
   isBuild?: boolean;
   draggable?: boolean;
@@ -139,18 +140,30 @@ const CardStack = memo<CardStackProps>(({
   return (
     <View ref={stackRef} style={styles.stackContainer} onLayout={handleLayout}>
       {topCard && (
-        <TouchableOpacity
-          style={styles.stackTouchable}
-          activeOpacity={draggable ? 1.0 : 0.7}
-          disabled={draggable}
-        >
-          <Card
+        draggable && cardCount === 1 ? (
+          <DraggableCard
             card={topCard}
-            size="normal"
-            disabled={false}
-            draggable={draggable}
+            onDragStart={onDragStart}
+            onDragEnd={onDragEnd}
+            onDragMove={onDragMove}
+            currentPlayer={currentPlayer}
+            source={dragSource}
+            stackId={stackId}
           />
-        </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={styles.stackTouchable}
+            activeOpacity={draggable ? 1.0 : 0.7}
+            disabled={draggable}
+          >
+            <Card
+              card={topCard}
+              size="normal"
+              disabled={false}
+              draggable={draggable}
+            />
+          </TouchableOpacity>
+        )
       )}
 
       {/* Build value indicator */}
