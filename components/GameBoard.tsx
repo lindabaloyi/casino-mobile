@@ -1,28 +1,15 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Alert, Platform } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import * as NavigationBar from 'expo-navigation-bar';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Platform, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { GameState } from '../multiplayer/server/game-logic/game-state';
+import { determineActions } from '../utils/actionDeterminer';
+import ActionModal from './ActionModal';
 import BurgerMenu from './BurgerMenu';
+import CapturedCards from './CapturedCards';
+import ErrorModal from './ErrorModal';
 import PlayerHand from './playerHand';
 import TableCards from './TableCards';
-import CapturedCards from './CapturedCards';
-import ActionModal from './ActionModal';
-import ErrorModal from './ErrorModal';
-import { determineActions } from '../utils/actionDeterminer';
-
-interface GameState {
-  deck: any[];
-  playerHands: any[][];
-  tableCards: any[];
-  playerCaptures: any[][];
-  currentPlayer: number;
-  round: number;
-  scores: number[];
-  gameOver: boolean;
-  winner: number | null;
-  lastCapturer: number | null;
-  scoreDetails: any;
-}
 
 interface GameBoardProps {
   initialState: GameState;
@@ -152,15 +139,23 @@ export function GameBoard({ initialState, playerNumber, sendAction, onRestart, o
     if (targetInfo.type === 'loose') {
       // Automatically create temp stack when dropping hand card on loose card
       console.log(`[GameBoard] Auto-creating temp stack: hand card ${draggedItem.card.rank}${draggedItem.card.suit} on loose card ${targetInfo.card?.rank}${targetInfo.card?.suit}`);
-      const targetCard = gameState.tableCards.find(c =>
-        c.type === 'loose' && c.rank === targetInfo.card?.rank && c.suit === targetInfo.card?.suit
-      );
+
+      // Find target card among loose cards using type guard
+      const targetCard = gameState.tableCards.find(c => {
+        if ('rank' in c && 'suit' in c) {
+          return c.rank === targetInfo.card?.rank && c.suit === targetInfo.card?.suit;
+        }
+        return false;
+      });
 
       if (targetCard) {
-        // Check if player already has a temp stack
-        const hasTempStack = gameState.tableCards.some(c =>
-          c.type === 'temporary_stack' && c.owner === playerNumber
-        );
+        // Check if player already has a temp stack using type checks
+        const hasTempStack = gameState.tableCards.some(c => {
+          if ('type' in c && 'owner' in c) {
+            return c.type === 'temporary_stack' && c.owner === playerNumber;
+          }
+          return false;
+        });
 
         console.log(`[GameBoard] Player ${playerNumber} has temp stack already: ${hasTempStack}`);
 
@@ -191,7 +186,25 @@ export function GameBoard({ initialState, playerNumber, sendAction, onRestart, o
 
     // For other drop types, use the existing modal logic
     console.log(`[GameBoard] Determining actions for drop`);
-    const result = determineActions(draggedItem, targetInfo, gameState);
+
+    // Create compatibility GameState for determineActions function
+    // TODO: Remove this conversion once determineActions is updated to new types
+    const compatGameState = {
+      tableCards: gameState.tableCards.map(card => {
+        if ('type' in card) {
+          // Already properly typed
+          return card;
+        } else {
+          // Convert loose Card to TableCard format
+          return { ...card, type: 'loose' } as any;
+        }
+      }),
+      playerHands: gameState.playerHands,
+      currentPlayer: gameState.currentPlayer,
+      round: gameState.round
+    };
+
+    const result = determineActions(draggedItem, targetInfo, compatGameState);
 
     if (result.errorMessage) {
       console.log(`[GameBoard] Action determination error:`, result.errorMessage);
@@ -249,8 +262,8 @@ export function GameBoard({ initialState, playerNumber, sendAction, onRestart, o
 
   const handleFinalizeStack = useCallback((stackId: string) => {
     console.log(`[GameBoard] Finalizing stack:`, stackId);
-    const stack = gameState.tableCards.find(c => c.stackId === stackId);
-    if (stack) {
+    const stack = gameState.tableCards.find(c => 'stackId' in c && c.stackId === stackId);
+    if (stack && 'stackId' in stack) {
       sendAction({
         type: 'finalizeStagingStack',
         payload: { stack }
@@ -262,8 +275,8 @@ export function GameBoard({ initialState, playerNumber, sendAction, onRestart, o
 
   const handleCancelStack = useCallback((stackId: string) => {
     console.log(`[GameBoard] Canceling stack:`, stackId);
-    const stackToCancel = gameState.tableCards.find(c => c.stackId === stackId);
-    if (stackToCancel) {
+    const stackToCancel = gameState.tableCards.find(c => 'stackId' in c && c.stackId === stackId);
+    if (stackToCancel && 'stackId' in stackToCancel) {
       sendAction({
         type: 'cancelStagingStack',
         payload: { stackToCancel }

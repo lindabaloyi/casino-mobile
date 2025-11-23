@@ -25,8 +25,6 @@ export interface Build {
 export type TableCard = Card | TemporaryStack | Build;
 
 export interface GameState {
-  players: string[];
-  currentTurn: number;
   deck: Card[];
   playerHands: Card[][];
   tableCards: TableCard[];
@@ -72,8 +70,6 @@ export function initializeGame(): GameState {
   }
 
   return {
-    players: [],
-    currentTurn: 0,
     deck,
     playerHands,
     tableCards: [],

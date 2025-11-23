@@ -1,21 +1,6 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { useSocket } from '../hooks/useSocket';
+import { StyleSheet, Text, View } from 'react-native';
 import { GameBoard } from '../components/GameBoard';
-
-interface GameState {
-  deck: any[];
-  playerHands: any[][];
-  tableCards: any[];
-  playerCaptures: any[][];
-  currentPlayer: number;
-  round: number;
-  scores: number[];
-  gameOver: boolean;
-  winner: number | null;
-  lastCapturer: number | null;
-  scoreDetails: any;
-}
+import { useSocket } from '../hooks/useSocket';
 
 export const options = {
   headerShown: false,

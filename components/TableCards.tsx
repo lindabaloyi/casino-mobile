@@ -1,9 +1,8 @@
-import React, { useEffect, useRef, useCallback } from 'react';
-import { View, StyleSheet, Dimensions } from 'react-native';
-import Card, { CardType } from './card';
-import { TableCard } from '../utils/actionDeterminer';
+import React, { useCallback, useRef } from 'react';
+import { Dimensions, StyleSheet, View } from 'react-native';
+import { Card, TableCard } from '../multiplayer/server/game-logic/game-state';
+import { CardType } from './card';
 import CardStack from './CardStack';
-import DraggableCard from './DraggableCard';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -15,6 +14,12 @@ interface TableCardsProps {
   onCancelStack?: (stackId: string) => void;
   onTableCardDragStart?: (card: any) => void;
   onTableCardDragEnd?: (draggedItem: any, dropPosition: any) => void;
+}
+
+// Helper function to get card type from union types
+function getCardType(card: TableCard): 'loose' | 'temporary_stack' | 'build' {
+  if ('type' in card) return card.type;
+  return 'loose';  // Card objects are implicitly loose cards without type property
 }
 
 const TableCards: React.FC<TableCardsProps> = ({ tableCards = [], onDropOnCard, currentPlayer, onFinalizeStack, onCancelStack, onTableCardDragStart, onTableCardDragEnd }) => {
@@ -30,22 +35,23 @@ const TableCards: React.FC<TableCardsProps> = ({ tableCards = [], onDropOnCard, 
       // Dropped on a loose card
       const targetCard = tableCards[targetIndex];
 
-      if (targetCard && targetCard.type === 'loose') {
+      if (targetCard && getCardType(targetCard) === 'loose') {
+        const looseCard = targetCard as Card; // Type assertion for loose card
         // Check if this is a table-to-table drop
         if (draggedItem.source === 'table') {
-          console.log(`🎯 Table-to-table drop: ${draggedItem.card.rank}${draggedItem.card.suit} → ${targetCard.rank}${targetCard.suit}`);
+          console.log(`🎯 Table-to-table drop: ${draggedItem.card.rank}${draggedItem.card.suit} → ${looseCard.rank}${looseCard.suit}`);
           // For table-to-table drops, we don't call onDropOnCard
           // Instead, we return a special result that will be handled by the drag end
           return {
             handled: true,
             targetType: 'loose',
-            targetCard: targetCard
+            targetCard: looseCard
           };
         } else {
           // Normal hand-to-table drop
           return onDropOnCard?.(draggedItem, {
             type: 'loose',
-            card: targetCard,
+            card: looseCard,
             index: targetIndex
           }) || false;
         }
@@ -53,7 +59,7 @@ const TableCards: React.FC<TableCardsProps> = ({ tableCards = [], onDropOnCard, 
     } else if (targetType === 'build') {
       // Dropped on a build
       const targetBuild = tableCards[targetIndex];
-      if (targetBuild && targetBuild.type === 'build') {
+      if (targetBuild && getCardType(targetBuild) === 'build') {
         return onDropOnCard?.(draggedItem, {
           type: 'build',
           build: targetBuild,
@@ -63,11 +69,12 @@ const TableCards: React.FC<TableCardsProps> = ({ tableCards = [], onDropOnCard, 
     } else if (targetType === 'temp') {
       // Dropped on a temporary stack
       const targetStack = tableCards[targetIndex];
-      if (targetStack && targetStack.type === 'temporary_stack') {
+      if (targetStack && getCardType(targetStack) === 'temporary_stack') {
+        const tempStack = targetStack as any; // Type assertion for temp stack
         return onDropOnCard?.(draggedItem, {
           type: 'temporary_stack',
-          stack: targetStack,
-          stackId: targetStack.stackId,
+          stack: tempStack,
+          stackId: tempStack.stackId,
           index: targetIndex
         }) || false;
       }
@@ -86,15 +93,17 @@ const TableCards: React.FC<TableCardsProps> = ({ tableCards = [], onDropOnCard, 
         ) : (
           <View style={styles.cardsContainer}>
             {tableCards.map((tableItem, index) => {
-              // Handle different table item types
-              if (tableItem.type === 'loose') {
+              // Handle different table item types using union type helper
+              const itemType = getCardType(tableItem);
+              if (itemType === 'loose') {
                 // Loose card - use CardStack for drop zone
+                const looseCard = tableItem as Card; // Type assertion for loose card
                 const stackId = `loose-${index}`;
                 return (
                   <CardStack
-                    key={`table-card-${index}-${tableItem.rank}-${tableItem.suit}`}
+                    key={`table-card-${index}-${looseCard.rank}-${looseCard.suit}`}
                     stackId={stackId}
-                    cards={[tableItem as CardType]}
+                    cards={[looseCard as CardType]}
                     onDropStack={(draggedItem) => handleDropOnStack(draggedItem, stackId)}
                     isBuild={false}
                     currentPlayer={currentPlayer}
@@ -104,28 +113,30 @@ const TableCards: React.FC<TableCardsProps> = ({ tableCards = [], onDropOnCard, 
                     dragSource="table"
                   />
                 );
-              } else if (tableItem.type === 'build') {
+              } else if (itemType === 'build') {
                 // Build - use CardStack with build indicators
+                const buildItem = tableItem as any; // Type assertion for build
                 const stackId = `build-${index}`;
-                const buildCards = (tableItem as any).cards || [tableItem as CardType];
+                const buildCards = buildItem.cards || [tableItem as CardType];
                 return (
                   <CardStack
                     key={`table-build-${index}`}
                     stackId={stackId}
                     cards={buildCards}
                     onDropStack={(draggedItem) => handleDropOnStack(draggedItem, stackId)}
-                    buildValue={tableItem.value}
+                    buildValue={buildItem.value}
                     isBuild={true}
                     currentPlayer={currentPlayer}
                   />
                 );
-              } else if (tableItem.type === 'temporary_stack') {
+              } else if (itemType === 'temporary_stack') {
                 // Temporary stack - use CardStack with temp stack controls
+                const tempStackItem = tableItem as any; // Type assertion for temp stack
                 const stackId = `temp-${index}`;
-                const tempStackCards = (tableItem as any).cards || [];
+                const tempStackCards = tempStackItem.cards || [];
                 console.log(`[TableCards] Rendering temp stack:`, {
-                  stackId: tableItem.stackId || stackId,
-                  owner: (tableItem as any).owner,
+                  stackId: tempStackItem.stackId || stackId,
+                  owner: tempStackItem.owner,
                   currentPlayer,
                   cardCount: tempStackCards.length,
                   cards: tempStackCards.map((c: any) => `${c.rank}${c.suit}`)
@@ -133,13 +144,13 @@ const TableCards: React.FC<TableCardsProps> = ({ tableCards = [], onDropOnCard, 
                 return (
                   <CardStack
                     key={`table-temp-${index}`}
-                    stackId={tableItem.stackId || stackId}
+                    stackId={tempStackItem.stackId || stackId}
                     cards={tempStackCards}
                     onDropStack={(draggedItem) => handleDropOnStack(draggedItem, stackId)}
                     isBuild={false}
                     currentPlayer={currentPlayer}
                     isTemporaryStack={true}
-                    stackOwner={(tableItem as any).owner}
+                    stackOwner={tempStackItem.owner}
                     onFinalizeStack={onFinalizeStack}
                     onCancelStack={onCancelStack}
                   />

@@ -28,10 +28,14 @@ const {
   handleAddToTemporaryCaptureStack
 } = require('./game-logic/game-actions.js');
 
+// Import shared type-safe functions (maintains JavaScript compatibility)
+const { initializeGame: sharedInitializeGame, validateGameState } = require('./game-logic/shared-game-logic.js');
+
 console.log('[SERVER] Imported functions:', {
   handleCreateStagingStack: typeof handleCreateStagingStack,
   handleFinalizeStagingStack: typeof handleFinalizeStagingStack,
-  handleCancelStagingStack: typeof handleCancelStagingStack
+  handleCancelStagingStack: typeof handleCancelStagingStack,
+  sharedInitializeGame: typeof sharedInitializeGame
 });
 
 // Middleware for logging all connections and data
