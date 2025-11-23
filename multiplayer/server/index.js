@@ -8,7 +8,6 @@ const io = new Server(server, {
   cors: { origin: "*" } // Allow all origins for simplicity
 });
 
-// Import game logic functions
 const {
   handleCreateStagingStack,
   handleAddToStagingStack,
@@ -22,7 +21,7 @@ const {
   handleBuild,
   handleTableCardDrop,
   handleAddToTemporaryCaptureStack
-} = require('../../../casino-game-multiplayer-main/game-logic/game-actions.js');
+} = require('./game-logic/game-actions.js');
 
 console.log('[SERVER] Imported functions:', {
   handleCreateStagingStack: typeof handleCreateStagingStack,
