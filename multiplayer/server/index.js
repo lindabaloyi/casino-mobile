@@ -29,9 +29,30 @@ console.log('[SERVER] Imported functions:', {
   handleCancelStagingStack: typeof handleCancelStagingStack
 });
 
+// Middleware for logging all connections and data
+io.use((socket, next) => {
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}][SERVER] Handshake attempt for socket ${socket.id}, client IP: ${socket.handshake.address}`);
+  console.log(`[${timestamp}][SERVER] Handshake data:`, {
+    address: socket.handshake.address,
+    xdomain: socket.handshake.xdomain,
+    secure: socket.handshake.secure,
+    issued: socket.handshake.issued,
+    url: socket.handshake.url,
+    query: socket.handshake.query
+  });
+  next();
+});
+
+io.engine.on('connection_error', (err) => {
+  const timestamp = new Date().toISOString();
+  console.error(`[${timestamp}][SERVER] Connection error:`, err);
+});
+
 const PORT = process.env.PORT || 3001;
 
-let players = []; // Array of connected socket objects
+let waitingPlayers = []; // Array of waiting socket objects before game start
+let activeGameSockets = []; // Array of active players during game
 let gameState = null;
 
 function initializeGame() {
@@ -90,48 +111,68 @@ function initializeGame() {
 }
 
 io.on('connection', (socket) => {
-  console.log(`[SERVER] A user connected: ${socket.id}`);
-  players.push(socket); // Add to players array
-  console.log(`[SERVER] Total players connected: ${players.length}`);
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}][SERVER] New connection established: socket=${socket.id}`);
+  console.log(`[${timestamp}][SERVER] Connection details:`, {
+    id: socket.id,
+    connected: socket.connected,
+    handshake: {
+      address: socket.handshake.address,
+      transport: socket.handshake.transport,
+      time: socket.handshake.time,
+      issued: socket.handshake.issued,
+      secure: socket.handshake.secure
+    }
+  });
+  waitingPlayers.push(socket); // Add to waiting queue
+  console.log(`[${timestamp}][SERVER] Added to waiting queue. Total waiting players: ${waitingPlayers.length}`);
 
-  // Assign player number (0-based)
-  const playerNumber = players.length;
-  console.log(`[SERVER] Assigning player number ${playerNumber - 1} to socket: ${socket.id}`);
-  socket.emit('player-number', playerNumber - 1);
+  // If two players are waiting, start the game
+  if (waitingPlayers.length === 2) {
+    console.log('[SERVER] Two players found. Starting game...');
+    gameState = initializeGame();
 
-  if (players.length === 2) {
-    gameState = initializeGame(); // Starts with currentPlayer: 0
-    console.log('[SERVER] Two players connected. Starting game...');
+    // Assign player numbers and emit game-start event
+    activeGameSockets = waitingPlayers.slice(); // Copy to active players
+    waitingPlayers = []; // Clear waiting queue
 
-    // Send initial game state to both players
-    players.forEach((playerSocket, index) => {
-      console.log(`[SERVER] Emitting game-start to ${playerSocket.id} as playerNumber ${index}`);
+    activeGameSockets.forEach((playerSocket, index) => {
+      const playerNumber = index; // 0-indexed
+      const timestamp = new Date().toISOString();
+      console.log(`[${timestamp}][SERVER] Emitting game-start to ${playerSocket.id} as Player ${playerNumber}`);
       playerSocket.emit('game-start', { gameState, playerNumber: index });
     });
   }
 
-  socket.on('disconnect', () => {
-    console.log(`[SERVER] User disconnected: ${socket.id}`);
-    // Remove from players array - this maintains the index mapping!
-    players = players.filter(p => p.id !== socket.id);
-    console.log(`[SERVER] Total players after disconnect: ${players.length}`);
+  socket.on('disconnect', (reason) => {
+    const timestamp = new Date().toISOString();
+    console.log(`[${timestamp}][SERVER] Disconnect event for socket ${socket.id}, reason: ${reason}`);
+    console.log(`[${timestamp}][SERVER] Disconnect details:`, {
+      id: socket.id,
+      connected: socket.connected,
+      disconnected: socket.disconnected
+    });
+    // Remove from waiting queue or active players
+    waitingPlayers = waitingPlayers.filter(p => p.id !== socket.id);
+    activeGameSockets = activeGameSockets.filter(p => p.id !== socket.id);
+    console.log(`[${timestamp}][SERVER] After cleanup - Waiting: ${waitingPlayers.length}, Active: ${activeGameSockets.length}`);
 
-    if (players.length < 2) {
+    if (activeGameSockets.length < 2) {
       gameState = null;
-      console.log('[SERVER] Game reset due to insufficient players');
+      console.log(`[${timestamp}][SERVER] Game reset due to insufficient active players`);
     }
   });
 
   // Action processing with turn validation
   socket.on('game-action', (data) => {
     console.log(`[SERVER] Received game-action: ${data.type} from socket ${socket.id}`);
-    if (!gameState || players.length < 2) {
+    if (!gameState || activeGameSockets.length < 2) {
       console.log('[SERVER] Ignoring action, game not started or not enough players.');
       return;
     }
 
-    // 🔑 CRITICAL: Find player by socket ID in players array
-    const playerIndex = players.findIndex(p => p.id === socket.id);
+    // 🔑 CRITICAL: Find player by socket ID in activeGameSockets array
+    const playerIndex = activeGameSockets.findIndex(p => p.id === socket.id);
     if (playerIndex !== gameState.currentPlayer) {
       console.log(`[SERVER] Rejected action from playerIndex ${playerIndex} because it's player ${gameState.currentPlayer}'s turn.`);
       return socket.emit('error', { message: "It's not your turn." });
@@ -311,7 +352,7 @@ io.on('connection', (socket) => {
     console.log(`[SERVER] Full gameState to broadcast:`, JSON.stringify(gameState, null, 2));
 
     // 🔑 CRITICAL: Broadcast to ALL players (not just active ones)
-    console.log(`[SERVER] About to emit game-update to ${players.length} players`);
+    console.log(`[SERVER] About to emit game-update to ${activeGameSockets.length} players`);
     const stateToSend = JSON.parse(JSON.stringify(gameState)); // Deep clone to ensure no references
     io.emit('game-update', stateToSend);
     console.log(`[SERVER] Broadcasted game-update: currentPlayer=${stateToSend.currentPlayer}, tableCardsCount=${stateToSend.tableCards?.length || 0}`);

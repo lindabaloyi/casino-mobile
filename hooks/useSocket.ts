@@ -22,12 +22,19 @@ export const useSocket = () => {
   const [buildOptions, setBuildOptions] = useState<any>(null);
 
   useEffect(() => {
-    console.log('[CLIENT] Connecting to server...');
+    const timestamp = new Date().toISOString();
+    console.log(`[${timestamp}][CLIENT] Connecting to server at http://192.168.18.2:3001`);
     const newSocket = io('http://192.168.18.2:3001'); // Your computer's local IP address
     setSocket(newSocket);
 
     newSocket.on('connect', () => {
-      console.log('[CLIENT] Connected to server');
+      const timestamp = new Date().toISOString();
+      console.log(`[${timestamp}][CLIENT] Connected to server, socket.id: ${newSocket.id}`);
+      console.log(`[${timestamp}][CLIENT] Connection details:`, {
+        id: newSocket.id,
+        connected: newSocket.connected,
+        transport: newSocket.io.engine.transport.name
+      });
     });
 
     newSocket.on('game-start', (data: { gameState: GameState; playerNumber: number }) => {
@@ -52,8 +59,33 @@ export const useSocket = () => {
       // Could show error modal here
     });
 
-    newSocket.on('disconnect', () => {
-      console.log('[CLIENT] Disconnected from server');
+    newSocket.on('disconnect', (reason) => {
+      const timestamp = new Date().toISOString();
+      console.log(`[${timestamp}][CLIENT] Disconnected from server, reason: ${reason}`);
+      console.log(`[${timestamp}][CLIENT] Disconnect details:`, {
+        id: newSocket.id,
+        connected: newSocket.connected
+      });
+    });
+
+    newSocket.on('connect_error', (error) => {
+      const timestamp = new Date().toISOString();
+      console.error(`[${timestamp}][CLIENT] Connection error:`, error.message || error);
+    });
+
+    newSocket.on('reconnect', (attemptNumber) => {
+      const timestamp = new Date().toISOString();
+      console.log(`[${timestamp}][CLIENT] Reconnected after ${attemptNumber} attempts`);
+    });
+
+    newSocket.on('reconnect_attempt', (attemptNumber) => {
+      const timestamp = new Date().toISOString();
+      console.log(`[${timestamp}][CLIENT] Reconnect attempt ${attemptNumber}`);
+    });
+
+    newSocket.on('reconnect_error', (error) => {
+      const timestamp = new Date().toISOString();
+      console.error(`[${timestamp}][CLIENT] Reconnect error:`, error.message || error);
     });
 
     newSocket.on('build-options', (options: any) => {
@@ -67,8 +99,12 @@ export const useSocket = () => {
   }, []);
 
   const sendAction = (action: any) => {
+    const timestamp = new Date().toISOString();
     if (socket) {
+      console.log(`[${timestamp}][CLIENT] Sending game-action: ${action.type || 'unknown'}, data:`, action);
       socket.emit('game-action', action);
+    } else {
+      console.warn(`[${timestamp}][CLIENT] Attempted to send action but socket is null:`, action);
     }
   };
 
