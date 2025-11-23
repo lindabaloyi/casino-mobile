@@ -1,4 +1,7 @@
-import Config from 'react-native-config';
+/**
+ * Environment-based Smart Server URL Resolver
+ * Automatically detects the best server URL based on network context
+ */
 
 // Types for different network contexts
 export type NetworkMode = 'local' | 'lan' | 'production' | 'fallback';
@@ -27,10 +30,10 @@ export class ServerUrlResolver {
 
   constructor(config?: Partial<ServerConfig>) {
     this.config = {
-      localUrl: Config.SOCKET_URL_LOCAL || 'http://localhost:3001',
-      lanUrl: Config.SOCKET_URL_LAN || 'http://192.168.18.14:3001',
-      productionUrl: Config.SOCKET_URL_PRODUCTION,
-      enableAutoDetect: Config.AUTODETECT_ENABLED === 'true' ? true : false,
+      localUrl: process.env.SOCKET_URL_LOCAL || 'http://localhost:3001',
+      lanUrl: process.env.SOCKET_URL_LAN || 'http://192.168.18.14:3001',
+      productionUrl: process.env.SOCKET_URL_PRODUCTION,
+      enableAutoDetect: process.env.AUTODETECT_ENABLED === 'true' ? true : false,
       fallbackUrl: 'http://localhost:3001',
       ...config
     };
@@ -65,14 +68,8 @@ export class ServerUrlResolver {
   private getManualOverrideUrl(): string | null {
     // Check for explicit environment variables
     const envUrl = process.env.REACT_APP_SOCKET_URL ||
-                   process.env.SOCKET_URL;
-
-    // For React Native Config
-    const configUrl = (Config as any).SOCKET_URL;
-
-    if (configUrl && configUrl !== 'undefined') {
-      return configUrl;
-    }
+                   process.env.SOCKET_URL ||
+                   process.env.EXPO_PUBLIC_SOCKET_URL;
 
     if (envUrl && envUrl !== 'null' && envUrl !== 'undefined') {
       return envUrl;

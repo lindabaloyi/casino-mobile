@@ -5,7 +5,12 @@ const { Server } = require('socket.io');
 const app = express();
 const server = createServer(app);
 const io = new Server(server, {
-  cors: { origin: "*" } // Allow all origins for simplicity
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"],
+    allowedHeaders: ["*"],
+    credentials: true
+  }
 });
 
 const {
@@ -111,6 +116,8 @@ function initializeGame() {
 }
 
 io.on('connection', (socket) => {
+  console.log("Client connected:", socket.id); // PRD Section 5.3: Log connections
+
   const timestamp = new Date().toISOString();
   console.log(`[${timestamp}][SERVER] New connection established: socket=${socket.id}`);
   console.log(`[${timestamp}][SERVER] Connection details:`, {
@@ -362,6 +369,6 @@ io.on('connection', (socket) => {
 
 
 
-server.listen(PORT, () => {
-  console.log(`[SERVER] Matchmaking server listening on *:${PORT}`);
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`[SERVER] Matchmaking server listening on all interfaces at port ${PORT}`);
 });
