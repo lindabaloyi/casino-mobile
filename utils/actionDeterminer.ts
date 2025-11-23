@@ -1,5 +1,10 @@
-// Action determination logic for Casino card game
-// Determines what actions are possible when a card is played
+// DEPRECATED: Action determination logic for Casino card game
+// DEPRECATED: This file has been replaced by shared-game-logic.js
+// DEPRECATED: Use determineActions from '../multiplayer/server/game-logic/shared-game-logic.js' instead
+// DEPRECATED: This file will be removed after migration completes
+
+console.warn('⚠️  DEPRECATED: utils/actionDeterminer.ts - Migrate to shared-game-logic.js');
+console.warn('⚠️  DEPRECATED: Use: import { determineActions } from \'../multiplayer/server/game-logic/shared-game-logic.js\'');
 
 export interface Card {
   suit: string;
