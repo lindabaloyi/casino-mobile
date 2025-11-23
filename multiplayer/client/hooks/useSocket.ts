@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
+import { getOptimalServerUrl } from '../utils/serverUrl';
 
 interface GameState {
   players: string[];
@@ -13,67 +14,72 @@ export const useSocket = () => {
   const [playerNumber, setPlayerNumber] = useState<number | null>(null);
 
   useEffect(() => {
-    const timestamp = new Date().toISOString();
-    console.log(`[${timestamp}][CLIENT] Connecting to server at http://localhost:3001`);
-    const newSocket = io('http://localhost:3001'); // Adjust URL as needed
-    setSocket(newSocket);
-
-    newSocket.on('connect', () => {
+    const connectToServer = async () => {
+      const serverUrl = await getOptimalServerUrl();
       const timestamp = new Date().toISOString();
-      console.log(`[${timestamp}][CLIENT] Connected to server, socket.id: ${newSocket.id}`);
-      console.log(`[${timestamp}][CLIENT] Connection details:`, {
-        id: newSocket.id,
-        connected: newSocket.connected,
-        transport: newSocket.io.engine.transport.name
+      console.log(`[${timestamp}][CLIENT] Connecting to server at ${serverUrl}`);
+      const newSocket = io(serverUrl);
+      setSocket(newSocket);
+
+      newSocket.on('connect', () => {
+        const timestamp = new Date().toISOString();
+        console.log(`[${timestamp}][CLIENT] Connected to server, socket.id: ${newSocket.id}`);
+        console.log(`[${timestamp}][CLIENT] Connection details:`, {
+          id: newSocket.id,
+          connected: newSocket.connected,
+          transport: newSocket.io.engine.transport.name
+        });
       });
-    });
 
-    newSocket.on('game-start', (data: { gameState: GameState; playerNumber: number }) => {
-      console.log('[CLIENT] Game started:', data);
-      setGameState(data.gameState);
-      setPlayerNumber(data.playerNumber);
-    });
-
-    newSocket.on('game-update', (updatedGameState: GameState) => {
-      console.log('[CLIENT] Game state updated:', {
-        currentPlayer: updatedGameState.currentTurn,
-        players: updatedGameState.players?.length || 0
+      newSocket.on('game-start', (data: { gameState: GameState; playerNumber: number }) => {
+        console.log('[CLIENT] Game started:', data);
+        setGameState(data.gameState);
+        setPlayerNumber(data.playerNumber);
       });
-      setGameState(updatedGameState);
-    });
 
-    newSocket.on('disconnect', (reason) => {
-      const timestamp = new Date().toISOString();
-      console.log(`[${timestamp}][CLIENT] Disconnected from server, reason: ${reason}`);
-      console.log(`[${timestamp}][CLIENT] Disconnect details:`, {
-        id: newSocket.id,
-        connected: newSocket.connected
+      newSocket.on('game-update', (updatedGameState: GameState) => {
+        console.log('[CLIENT] Game state updated:', {
+          currentPlayer: updatedGameState.currentTurn,
+          players: updatedGameState.players?.length || 0
+        });
+        setGameState(updatedGameState);
       });
-    });
 
-    newSocket.on('connect_error', (error) => {
-      const timestamp = new Date().toISOString();
-      console.error(`[${timestamp}][CLIENT] Connection error:`, error.message || error);
-    });
+      newSocket.on('disconnect', (reason) => {
+        const timestamp = new Date().toISOString();
+        console.log(`[${timestamp}][CLIENT] Disconnected from server, reason: ${reason}`);
+        console.log(`[${timestamp}][CLIENT] Disconnect details:`, {
+          id: newSocket.id,
+          connected: newSocket.connected
+        });
+      });
 
-    newSocket.on('reconnect', (attemptNumber) => {
-      const timestamp = new Date().toISOString();
-      console.log(`[${timestamp}][CLIENT] Reconnected after ${attemptNumber} attempts`);
-    });
+      newSocket.on('connect_error', (error) => {
+        const timestamp = new Date().toISOString();
+        console.error(`[${timestamp}][CLIENT] Connection error:`, error.message || error);
+      });
 
-    newSocket.on('reconnect_attempt', (attemptNumber) => {
-      const timestamp = new Date().toISOString();
-      console.log(`[${timestamp}][CLIENT] Reconnect attempt ${attemptNumber}`);
-    });
+      newSocket.on('reconnect', (attemptNumber) => {
+        const timestamp = new Date().toISOString();
+        console.log(`[${timestamp}][CLIENT] Reconnected after ${attemptNumber} attempts`);
+      });
 
-    newSocket.on('reconnect_error', (error) => {
-      const timestamp = new Date().toISOString();
-      console.error(`[${timestamp}][CLIENT] Reconnect error:`, error.message || error);
-    });
+      newSocket.on('reconnect_attempt', (attemptNumber) => {
+        const timestamp = new Date().toISOString();
+        console.log(`[${timestamp}][CLIENT] Reconnect attempt ${attemptNumber}`);
+      });
 
-    return () => {
-      newSocket.close();
+      newSocket.on('reconnect_error', (error) => {
+        const timestamp = new Date().toISOString();
+        console.error(`[${timestamp}][CLIENT] Reconnect error:`, error.message || error);
+      });
+
+      return () => {
+        newSocket.close();
+      };
     };
+
+    connectToServer();
   }, []);
 
   const sendAction = (action: any) => {
