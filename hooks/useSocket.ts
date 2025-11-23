@@ -15,7 +15,9 @@ interface GameState {
   scoreDetails: any;
 }
 
-const SOCKET_URL = process.env.EXPO_PUBLIC_SOCKET_URL;
+const SOCKET_URL = process.env.EXPO_PUBLIC_SOCKET_URL || "http://localhost:3001";
+console.log("[ENV] SOCKET_URL read from .env:", process.env.EXPO_PUBLIC_SOCKET_URL);
+console.log("[ENV] Final SOCKET_URL used:", SOCKET_URL);
 
 export const useSocket = () => {
   const [socket, setSocket] = useState<Socket | null>(null);
@@ -24,6 +26,7 @@ export const useSocket = () => {
   const [buildOptions, setBuildOptions] = useState<any>(null);
 
   const socketInstance = useMemo(() => {
+    console.log("[SOCKET] Creating connection to:", SOCKET_URL);
     return io(SOCKET_URL, {
       transports: ["websocket"], // disable polling
       reconnection: true,
