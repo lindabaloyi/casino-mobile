@@ -279,7 +279,7 @@ io.on('connection', (socket) => {
           console.log(`[SERVER] Player ${playerIndex} creating staging stack:`, data.payload);
           console.log(`[SERVER] About to call handleCreateStagingStack, function exists:`, typeof handleCreateStagingStack);
           try {
-            newGameState = handleCreateStagingStack(gameState, data.payload.handCard, data.payload.tableCard);
+            newGameState = handleCreateStagingStack(gameState, data.payload.handCard, data.payload.tableCard, playerIndex);
             console.log(`[SERVER] handleCreateStagingStack returned successfully`);
             console.log(`[SERVER] New tableCards count:`, newGameState.tableCards?.length || 0);
           } catch (error) {

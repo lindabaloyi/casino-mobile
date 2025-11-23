@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { GameState } from '../multiplayer/server/game-logic/game-state';
-import { determineActions } from '../utils/actionDeterminer';
+import { determineActions } from '../multiplayer/server/game-logic/shared-game-logic';
 import ActionModal from './ActionModal';
 import BurgerMenu from './BurgerMenu';
 import CapturedCards from './CapturedCards';
@@ -538,3 +538,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
 });
+
+export default GameBoard;
