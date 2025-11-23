@@ -8,7 +8,7 @@ const handleCreateStagingStack = (gameState, handCard, tableCard) => {
 };
 
 const handleAddToStagingStack = (gameState, handCard, targetStack) => {
-  // Stub: return gameState unchanged
+  // Stub: return gameState unchangeds
   console.log('handleAddToStagingStack called with:', handCard, targetStack);
   return gameState;
 };
