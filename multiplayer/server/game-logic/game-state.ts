@@ -3,7 +3,7 @@ export interface Card {
   suit: string;
   rank: string;
   value: number;
-  source?: string; // For tracking card origin in temp stacksssss
+  source?: string; // For tracking csard origin in temp stacksssss
 }
 
 export interface TemporaryStack {
